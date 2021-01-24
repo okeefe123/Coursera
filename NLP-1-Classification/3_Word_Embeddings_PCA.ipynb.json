@@ -1,0 +1,1079 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Assignment 3: Hello Vectors\n",
+    "\n",
+    "Welcome to this week's programming assignment on exploring word vectors.\n",
+    "In natural language processing, we represent each word as a vector consisting of numbers.\n",
+    "The vector encodes the meaning of the word. These numbers (or weights) for each word are learned using various machine\n",
+    "learning models, which we will explore in more detail later in this specialization. Rather than make you code the\n",
+    "machine learning models from scratch, we will show you how to use them. In the real world, you can always load the\n",
+    "trained word vectors, and you will almost never have to train them from scratch. In this assignment, you will:\n",
+    "\n",
+    "- Predict analogies between words.\n",
+    "- Use PCA to reduce the dimensionality of the word embeddings and plot them in two dimensions.\n",
+    "- Compare word embeddings by using a similarity measure (the cosine similarity).\n",
+    "- Understand how these vector space models work.\n",
+    "\n",
+    "\n",
+    "\n",
+    "## 1.0 Predict the Countries from Capitals\n",
+    "\n",
+    "In the lectures, we have illustrated the word analogies\n",
+    "by finding the capital of a country from the country. \n",
+    "We have changed the problem a bit in this part of the assignment. You are asked to predict the **countries** \n",
+    "that corresponds to some **capitals**.\n",
+    "You are playing trivia against some second grader who just took their geography test and knows all the capitals by heart.\n",
+    "Thanks to NLP, you will be able to answer the questions properly. In other words, you will write a program that can give\n",
+    "you the country by its capital. That way you are pretty sure you will win the trivia game. We will start by exploring the data set.\n",
+    "\n",
+    "<img src = 'map.jpg' width=\"width\" height=\"height\" style=\"width:467px;height:300px;\"/>\n",
+    "\n",
+    "###  1.1 Importing the data\n",
+    "\n",
+    "As usual, you start by importing some essential Python libraries and then load the dataset.\n",
+    "The dataset will be loaded as a [Pandas DataFrame](https://pandas.pydata.org/pandas-docs/stable/getting_started/dsintro.html),\n",
+    "which is very a common method in data science.\n",
+    "This may take a few minutes because of the large size of the data."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Run this cell to import packages.\n",
+    "import pickle\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "from utils import get_vectors"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>city1</th>\n",
+       "      <th>country1</th>\n",
+       "      <th>city2</th>\n",
+       "      <th>country2</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>Athens</td>\n",
+       "      <td>Greece</td>\n",
+       "      <td>Bangkok</td>\n",
+       "      <td>Thailand</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>Athens</td>\n",
+       "      <td>Greece</td>\n",
+       "      <td>Beijing</td>\n",
+       "      <td>China</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>Athens</td>\n",
+       "      <td>Greece</td>\n",
+       "      <td>Berlin</td>\n",
+       "      <td>Germany</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>Athens</td>\n",
+       "      <td>Greece</td>\n",
+       "      <td>Bern</td>\n",
+       "      <td>Switzerland</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>Athens</td>\n",
+       "      <td>Greece</td>\n",
+       "      <td>Cairo</td>\n",
+       "      <td>Egypt</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "    city1 country1    city2     country2\n",
+       "0  Athens   Greece  Bangkok     Thailand\n",
+       "1  Athens   Greece  Beijing        China\n",
+       "2  Athens   Greece   Berlin      Germany\n",
+       "3  Athens   Greece     Bern  Switzerland\n",
+       "4  Athens   Greece    Cairo        Egypt"
+      ]
+     },
+     "execution_count": 2,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "data = pd.read_csv('capitals.txt', delimiter=' ')\n",
+    "data.columns = ['city1', 'country1', 'city2', 'country2']\n",
+    "\n",
+    "# print first five elements in the DataFrame\n",
+    "data.head(5)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "***\n",
+    "\n",
+    "### To Run This Code On Your Own Machine:\n",
+    "Note that because the original google news word embedding dataset is about 3.64 gigabytes,\n",
+    "the workspace is not able to handle the full file set.  So we've downloaded the full dataset,\n",
+    "extracted a sample of the words that we're going to analyze in this assignment, and saved\n",
+    "it in a pickle file called `word_embeddings_capitals.p`\n",
+    "\n",
+    "If you want to download the full dataset on your own and choose your own set of word embeddings,\n",
+    "please see the instructions and some helper code.\n",
+    "\n",
+    "- Download the dataset from this [page](https://code.google.com/archive/p/word2vec/).\n",
+    "- Search in the page for 'GoogleNews-vectors-negative300.bin.gz' and click the link to download."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Copy-paste the code below and run it on your local machine after downloading\n",
+    "the dataset to the same directory as the notebook.\n",
+    "\n",
+    "```python\n",
+    "import nltk\n",
+    "from gensim.models import KeyedVectors\n",
+    "\n",
+    "\n",
+    "embeddings = KeyedVectors.load_word2vec_format('./GoogleNews-vectors-negative300.bin', binary = True)\n",
+    "f = open('capitals.txt', 'r').read()\n",
+    "set_words = set(nltk.word_tokenize(f))\n",
+    "select_words = words = ['king', 'queen', 'oil', 'gas', 'happy', 'sad', 'city', 'town', 'village', 'country', 'continent', 'petroleum', 'joyful']\n",
+    "for w in select_words:\n",
+    "    set_words.add(w)\n",
+    "\n",
+    "def get_word_embeddings(embeddings):\n",
+    "\n",
+    "    word_embeddings = {}\n",
+    "    for word in embeddings.vocab:\n",
+    "        if word in set_words:\n",
+    "            word_embeddings[word] = embeddings[word]\n",
+    "    return word_embeddings\n",
+    "\n",
+    "\n",
+    "# Testing your function\n",
+    "word_embeddings = get_word_embeddings(embeddings)\n",
+    "print(len(word_embeddings))\n",
+    "pickle.dump( word_embeddings, open( \"word_embeddings_subset.p\", \"wb\" ) )\n",
+    "```\n",
+    "\n",
+    "***"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now we will load the word embeddings as a [Python dictionary](https://docs.python.org/3/tutorial/datastructures.html#dictionaries).\n",
+    "As stated, these have already been obtained through a machine learning algorithm. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "243"
+      ]
+     },
+     "execution_count": 3,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "word_embeddings = pickle.load(open(\"word_embeddings_subset.p\", \"rb\"))\n",
+    "len(word_embeddings)  # there should be 243 words that will be used in this assignment"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Each of the word embedding is a 300-dimensional vector."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "dimension: 300\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"dimension: {}\".format(word_embeddings['Spain'].shape[0]))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Predict relationships among words\n",
+    "\n",
+    "Now you will write a function that will use the word embeddings to predict relationships among words.\n",
+    "* The function will take as input three words.\n",
+    "* The first two are related to each other.\n",
+    "* It will predict a 4th word which is related to the third word in a similar manner as the two first words are related to each other.\n",
+    "* As an example, \"Athens is to Greece as Bangkok is to ______\"?\n",
+    "* You will write a program that is capable of finding the fourth word.\n",
+    "* We will give you a hint to show you how to compute this.\n",
+    "\n",
+    "A similar analogy would be the following:\n",
+    "\n",
+    "<img src = 'vectors.jpg' width=\"width\" height=\"height\" style=\"width:467px;height:200px;\"/>\n",
+    "\n",
+    "You will implement a function that can tell you the capital of a country.\n",
+    "You should use the same methodology shown in the figure above. To do this,\n",
+    "compute you'll first compute cosine similarity metric or the Euclidean distance."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1.2 Cosine Similarity\n",
+    "\n",
+    "The cosine similarity function is:\n",
+    "\n",
+    "$$\\cos (\\theta)=\\frac{\\mathbf{A} \\cdot \\mathbf{B}}{\\|\\mathbf{A}\\|\\|\\mathbf{B}\\|}=\\frac{\\sum_{i=1}^{n} A_{i} B_{i}}{\\sqrt{\\sum_{i=1}^{n} A_{i}^{2}} \\sqrt{\\sum_{i=1}^{n} B_{i}^{2}}}\\tag{1}$$\n",
+    "\n",
+    "$A$ and $B$ represent the word vectors and $A_i$ or $B_i$ represent index i of that vector.\n",
+    "& Note that if A and B are identical, you will get $cos(\\theta) = 1$.\n",
+    "* Otherwise, if they are the total opposite, meaning, $A= -B$, then you would get $cos(\\theta) = -1$.\n",
+    "* If you get $cos(\\theta) =0$, that means that they are orthogonal (or perpendicular).\n",
+    "* Numbers between 0 and 1 indicate a similarity score.\n",
+    "* Numbers between -1-0 indicate a dissimilarity score.\n",
+    "\n",
+    "**Instructions**: Implement a function that takes in two word vectors and computes the cosine distance."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<details>\n",
+    "<summary>\n",
+    "    <font size=\"3\" color=\"darkgreen\"><b>Hints</b></font>\n",
+    "</summary>\n",
+    "<p>\n",
+    "<ul>\n",
+    "    <li> Python's<a href=\"https://docs.scipy.org/doc/numpy/reference/\" > NumPy library </a> adds support for linear algebra operations (e.g., dot product, vector norm ...).</li>\n",
+    "    <li>Use <a href=\"https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html\" > numpy.dot </a>.</li>\n",
+    "    <li>Use <a href=\"https://docs.scipy.org/doc/numpy/reference/generated/numpy.linalg.norm.html\">numpy.linalg.norm </a>.</li>\n",
+    "</ul>\n",
+    "</p>"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# UNQ_C1 (UNIQUE CELL IDENTIFIER, DO NOT EDIT)\n",
+    "def cosine_similarity(A, B):\n",
+    "    '''\n",
+    "    Input:\n",
+    "        A: a numpy array which corresponds to a word vector\n",
+    "        B: A numpy array which corresponds to a word vector\n",
+    "    Output:\n",
+    "        cos: numerical number representing the cosine similarity between A and B.\n",
+    "    '''\n",
+    "\n",
+    "    ### START CODE HERE (REPLACE INSTANCES OF 'None' with your code) ###\n",
+    "    \n",
+    "    dot = np.dot(A, B)\n",
+    "    norma = np.linalg.norm(A)\n",
+    "    normb = np.linalg.norm(B)\n",
+    "    cos = dot / (norma * normb)\n",
+    "\n",
+    "    ### END CODE HERE ###\n",
+    "    return cos"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0.6510956"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# feel free to try different words\n",
+    "king = word_embeddings['king']\n",
+    "queen = word_embeddings['queen']\n",
+    "\n",
+    "cosine_similarity(king, queen)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Expected Output**:\n",
+    "\n",
+    "$\\approx$ 0.6510956"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1.3 Euclidean distance\n",
+    "\n",
+    "You will now implement a function that computes the similarity between two vectors using the Euclidean distance.\n",
+    "Euclidean distance is defined as:\n",
+    "\n",
+    "$$ \\begin{aligned} d(\\mathbf{A}, \\mathbf{B})=d(\\mathbf{B}, \\mathbf{A}) &=\\sqrt{\\left(A_{1}-B_{1}\\right)^{2}+\\left(A_{2}-B_{2}\\right)^{2}+\\cdots+\\left(A_{n}-B_{n}\\right)^{2}} \\\\ &=\\sqrt{\\sum_{i=1}^{n}\\left(A_{i}-B_{i}\\right)^{2}} \\end{aligned}$$\n",
+    "\n",
+    "* $n$ is the number of elements in the vector\n",
+    "* $A$ and $B$ are the corresponding word vectors. \n",
+    "* The more similar the words, the more likely the Euclidean distance will be close to 0. \n",
+    "\n",
+    "**Instructions**: Write a function that computes the Euclidean distance between two vectors."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<details>    \n",
+    "<summary>\n",
+    "    <font size=\"3\" color=\"darkgreen\"><b>Hints</b></font>\n",
+    "</summary>\n",
+    "<p>\n",
+    "<ul>\n",
+    "    <li>Use <a href=\"https://docs.scipy.org/doc/numpy/reference/generated/numpy.linalg.norm.html\" > numpy.linalg.norm </a>.</li>\n",
+    "</ul>\n",
+    "</p>"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# UNQ_C2 (UNIQUE CELL IDENTIFIER, DO NOT EDIT)\n",
+    "def euclidean(A, B):\n",
+    "    \"\"\"\n",
+    "    Input:\n",
+    "        A: a numpy array which corresponds to a word vector\n",
+    "        B: A numpy array which corresponds to a word vector\n",
+    "    Output:\n",
+    "        d: numerical number representing the Euclidean distance between A and B.\n",
+    "    \"\"\"\n",
+    "\n",
+    "    ### START CODE HERE (REPLACE INSTANCES OF 'None' with your code) ###\n",
+    "\n",
+    "    # euclidean distance\n",
+    "\n",
+    "    d = np.linalg.norm(A-B)\n",
+    "\n",
+    "    ### END CODE HERE ###\n",
+    "\n",
+    "    return d\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#man is to king as woman is to queen\n",
+    "#queen = king - man + woman\n",
+    "#DC is to USA as Paris is to France\n",
+    "#France = USA - DC + Paris\n",
+    "#vec = country1 - city1 + city2"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "2.4796925"
+      ]
+     },
+     "execution_count": 8,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Test your function\n",
+    "euclidean(king, queen)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Expected Output:**\n",
+    "\n",
+    "2.4796925"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1.4 Finding the country of each capital\n",
+    "\n",
+    "Now, you  will use the previous functions to compute similarities between vectors,\n",
+    "and use these to find the capital cities of countries. You will write a function that\n",
+    "takes in three words, and the embeddings dictionary. Your task is to find the\n",
+    "capital cities. For example, given the following words: \n",
+    "\n",
+    "- 1: Athens 2: Greece 3: Baghdad,\n",
+    "\n",
+    "your task is to predict the country 4: Iraq.\n",
+    "\n",
+    "**Instructions**: \n",
+    "\n",
+    "1. To predict the capital you might want to look at the *King - Man + Woman = Queen* example above, and implement that scheme into a mathematical function, using the word embeddings and a similarity function.\n",
+    "\n",
+    "2. Iterate over the embeddings dictionary and compute the cosine similarity score between your vector and the current word embedding.\n",
+    "\n",
+    "3. You should add a check to make sure that the word you return is not any of the words that you fed into your function. Return the one with the highest score."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# UNQ_C3 (UNIQUE CELL IDENTIFIER, DO NOT EDIT)\n",
+    "def get_country(city1, country1, city2, embeddings):\n",
+    "    \"\"\"\n",
+    "    Input:\n",
+    "        city1: a string (the capital city of country1)\n",
+    "        country1: a string (the country of capital1)\n",
+    "        city2: a string (the capital city of country2)\n",
+    "        embeddings: a dictionary where the keys are words and values are their embeddings\n",
+    "    Output:\n",
+    "        countries: a dictionary with the most likely country and its similarity score\n",
+    "    \"\"\"\n",
+    "    \n",
+    "    ### START CODE HERE (REPLACE INSTANCES OF 'None' with your code) ###\n",
+    "\n",
+    "    # store the city1, country 1, and city 2 in a set called group\n",
+    "    group = set((city1, country1, city2))\n",
+    "\n",
+    "    # get embeddings of city 1\n",
+    "    city1_emb = embeddings[city1]\n",
+    "\n",
+    "    # get embedding of country 1\n",
+    "    country1_emb = embeddings[country1]\n",
+    "\n",
+    "    # get embedding of city 2\n",
+    "    city2_emb = embeddings[city2]\n",
+    "\n",
+    "    # get embedding of country 2 (it's a combination of the embeddings of country 1, city 1 and city 2)\n",
+    "    # Remember: King - Man + Woman = Queen\n",
+    "    \n",
+    "\n",
+    "    vec = country1_emb - city1_emb + city2_emb\n",
+    "    \n",
+    "\n",
+    "    # Initialize the similarity to -1 (it will be replaced by a similarities that are closer to +1)\n",
+    "    similarity = -1\n",
+    "\n",
+    "    # initialize country to an empty string\n",
+    "    country = ''\n",
+    "\n",
+    "    # loop through all words in the embeddings dictionary\n",
+    "    for word in embeddings.keys():\n",
+    "\n",
+    "        # first check that the word is not already in the 'group'\n",
+    "        if word not in group:\n",
+    "\n",
+    "            # get the word embedding\n",
+    "            word_emb = embeddings[word]\n",
+    "\n",
+    "            # calculate cosine similarity between embedding of country 2 and the word in the embeddings dictionary\n",
+    "            cur_similarity = cosine_similarity(vec, word_emb)\n",
+    "\n",
+    "            # if the cosine similarity is more similar than the previously best similarity...\n",
+    "            if cur_similarity > similarity:\n",
+    "\n",
+    "                # update the similarity to the new, better similarity\n",
+    "                similarity = cur_similarity\n",
+    "\n",
+    "                # store the country as a tuple, which contains the word and the similarity\n",
+    "                country = (word, similarity)\n",
+    "\n",
+    "    ### END CODE HERE ###\n",
+    "\n",
+    "    return country"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "('Egypt', 0.7626821)"
+      ]
+     },
+     "execution_count": 10,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Testing your function, note to make it more robust you can return the 5 most similar words.\n",
+    "get_country('Athens', 'Greece', 'Cairo', word_embeddings)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Expected Output:**\n",
+    "\n",
+    "('Egypt', 0.7626821)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1.5 Model Accuracy\n",
+    "\n",
+    "Now you will test your new function on the dataset and check the accuracy of the model:\n",
+    "\n",
+    "$$\\text{Accuracy}=\\frac{\\text{Correct # of predictions}}{\\text{Total # of predictions}}$$\n",
+    "\n",
+    "**Instructions**: Write a program that can compute the accuracy on the dataset provided for you. You have to iterate over every row to get the corresponding words and feed them into you `get_country` function above. "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<details>\n",
+    "<summary>\n",
+    "    <font size=\"3\" color=\"darkgreen\"><b>Hints</b></font>\n",
+    "</summary>\n",
+    "<p>\n",
+    "<ul>\n",
+    "    <li>Use <a href=\"https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.iterrows.html\" > pandas.DataFrame.iterrows </a>.</li>\n",
+    "</ul>\n",
+    "</p>"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# UNQ_C4 (UNIQUE CELL IDENTIFIER, DO NOT EDIT)\n",
+    "def get_accuracy(word_embeddings, data):\n",
+    "    '''\n",
+    "    Input:\n",
+    "        word_embeddings: a dictionary where the key is a word and the value is its embedding\n",
+    "        data: a pandas dataframe containing all the country and capital city pairs\n",
+    "    \n",
+    "    Output:\n",
+    "        accuracy: the accuracy of the model\n",
+    "    '''\n",
+    "\n",
+    "    ### START CODE HERE (REPLACE INSTANCES OF 'None' with your code) ###\n",
+    "    # initialize num correct to zero\n",
+    "    num_correct = 0\n",
+    "\n",
+    "    # loop through the rows of the dataframe\n",
+    "    for i, row in data.iterrows():\n",
+    "        #print(row)\n",
+    "        # get city1\n",
+    "        city1 = row[0]\n",
+    "\n",
+    "        # get country1\n",
+    "        country1 = row[1]\n",
+    "\n",
+    "        # get city2\n",
+    "        city2 =  row[2]\n",
+    "\n",
+    "        # get country2\n",
+    "        country2 = row[3]\n",
+    "\n",
+    "        # use get_country to find the predicted country2\n",
+    "        predicted_country2, _ = get_country(city1, country1, city2, word_embeddings)\n",
+    "\n",
+    "        # if the predicted country2 is the same as the actual country2...\n",
+    "        if predicted_country2 == country2:\n",
+    "            # increment the number of correct by 1\n",
+    "            num_correct += 1\n",
+    "\n",
+    "    # get the number of rows in the data dataframe (length of dataframe)\n",
+    "    m = len(data)\n",
+    "\n",
+    "    # calculate the accuracy by dividing the number correct by m\n",
+    "    accuracy = num_correct / m\n",
+    "\n",
+    "    ### END CODE HERE ###\n",
+    "    return accuracy\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**NOTE: The cell below takes about 30 SECONDS to run.**"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Accuracy is 0.92\n"
+     ]
+    }
+   ],
+   "source": [
+    "accuracy = get_accuracy(word_embeddings, data)\n",
+    "print(f\"Accuracy is {accuracy:.2f}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Expected Output:**\n",
+    "\n",
+    "$\\approx$ 0.92"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 3.0 Plotting the vectors using PCA\n",
+    "\n",
+    "Now you will explore the distance between word vectors after reducing their dimension.\n",
+    "The technique we will employ is known as\n",
+    "[*principal component analysis* (PCA)](https://en.wikipedia.org/wiki/Principal_component_analysis).\n",
+    "As we saw, we are working in a 300-dimensional space in this case.\n",
+    "Although from a computational perspective we were able to perform a good job,\n",
+    "it is impossible to visualize results in such high dimensional spaces.\n",
+    "\n",
+    "You can think of PCA as a method that projects our vectors in a space of reduced\n",
+    "dimension, while keeping the maximum information about the original vectors in\n",
+    "their reduced counterparts. In this case, by *maximum infomation* we mean that the\n",
+    "Euclidean distance between the original vectors and their projected siblings is\n",
+    "minimal. Hence vectors that were originally close in the embeddings dictionary,\n",
+    "will produce lower dimensional vectors that are still close to each other.\n",
+    "\n",
+    "You will see that when you map out the words, similar words will be clustered\n",
+    "next to each other. For example, the words 'sad', 'happy', 'joyful' all describe\n",
+    "emotion and are supposed to be near each other when plotted.\n",
+    "The words: 'oil', 'gas', and 'petroleum' all describe natural resources.\n",
+    "Words like 'city', 'village', 'town' could be seen as synonyms and describe a\n",
+    "similar thing.\n",
+    "\n",
+    "Before plotting the words, you need to first be able to reduce each word vector\n",
+    "with PCA into 2 dimensions and then plot it. The steps to compute PCA are as follows:\n",
+    "\n",
+    "1. Mean normalize the data\n",
+    "2. Compute the covariance matrix of your data ($\\Sigma$). \n",
+    "3. Compute the eigenvectors and the eigenvalues of your covariance matrix\n",
+    "4. Multiply the first K eigenvectors by your normalized data. The transformation should look something as follows:\n",
+    "\n",
+    "<img src = 'word_embf.jpg' width=\"width\" height=\"height\" style=\"width:800px;height:200px;\"/>"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Instructions**: \n",
+    "\n",
+    "You will write a program that takes in a data set where each row corresponds to a word vector. \n",
+    "* The word vectors are of dimension 300. \n",
+    "* Use PCA to change the 300 dimensions to `n_components` dimensions. \n",
+    "* The new matrix should be of dimension `m, n_componentns`. \n",
+    "\n",
+    "* First de-mean the data\n",
+    "* Get the eigenvalues using `linalg.eigh`.  Use `eigh` rather than `eig` since R is symmetric.  The performance gain when using `eigh` instead of `eig` is substantial.\n",
+    "* Sort the eigenvectors and eigenvalues by decreasing order of the eigenvalues.\n",
+    "* Get a subset of the eigenvectors (choose how many principle components you want to use using `n_components`).\n",
+    "* Return the new transformation of the data by multiplying the eigenvectors with the original data."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<details>\n",
+    "<summary>\n",
+    "    <font size=\"3\" color=\"darkgreen\"><b>Hints</b></font>\n",
+    "</summary>\n",
+    "<p>\n",
+    "<ul>\n",
+    "    <li>Use <a href=\"https://docs.scipy.org/doc/numpy/reference/generated/numpy.mean.html\" > numpy.mean(a,axis=None) </a> : If you set <code>axis = 0</code>, you take the mean for each column.  If you set <code>axis = 1</code>, you take the mean for each row.  Remember that each row is a word vector, and the number of columns are the number of dimensions in a word vector. </li>\n",
+    "    <li>Use <a href=\"https://docs.scipy.org/doc/numpy/reference/generated/numpy.cov.html\" > numpy.cov(m, rowvar=True) </a>. This calculates the covariance matrix.  By default <code>rowvar</code> is <code>True</code>.  From the documentation: \"If rowvar is True (default), then each row represents a variable, with observations in the columns.\"  In our case, each row is a word vector observation, and each column is a feature (variable). </li>\n",
+    "    <li>Use <a href=\"https://docs.scipy.org/doc/numpy/reference/generated/numpy.linalg.eigh.html\" > numpy.linalg.eigh(a, UPLO='L') </a> </li>\n",
+    "    <li>Use <a href=\"https://docs.scipy.org/doc/numpy/reference/generated/numpy.argsort.html\" > numpy.argsort </a> sorts the values in an array from smallest to largest, then returns the indices from this sort. </li>\n",
+    "    <li>In order to reverse the order of a list, you can use: <code>x[::-1]</code>.</li>\n",
+    "    <li>To apply the sorted indices to eigenvalues, you can use this format <code>x[indices_sorted]</code>.</li>\n",
+    "    <li>When applying the sorted indices to eigen vectors, note that each column represents an eigenvector.  In order to preserve the rows but sort on the columns, you can use this format <code>x[:,indices_sorted]</code></li>\n",
+    "    <li>To transform the data using a subset of the most relevant principle components, take the matrix multiplication of the eigenvectors with the original data.  </li>\n",
+    "    <li>The data is of shape <code>(n_observations, n_features)</code>.  </li>\n",
+    "    <li>The subset of eigenvectors are in a matrix of shape <code>(n_features, n_components)</code>.</li>\n",
+    "    <li>To multiply these together, take the transposes of both the eigenvectors <code>(n_components, n_features)</code> and the data (n_features, n_observations).</li>\n",
+    "    <li>The product of these two has dimensions <code>(n_components,n_observations)</code>.  Take its transpose to get the shape <code>(n_observations, n_components)</code>.</li>\n",
+    "</ul>\n",
+    "</p>"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 109,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# UNQ_C5 (UNIQUE CELL IDENTIFIER, DO NOT EDIT)\n",
+    "def compute_pca(X, n_components=2):\n",
+    "    \"\"\"\n",
+    "    Input:\n",
+    "        X: of dimension (m,n) where each row corresponds to a word vector\n",
+    "        n_components: Number of components you want to keep.\n",
+    "    Output:\n",
+    "        X_reduced: data transformed in 2 dims/columns + regenerated original data\n",
+    "    \"\"\"\n",
+    "\n",
+    "    ### START CODE HERE (REPLACE INSTANCES OF 'None' with your code) ###\n",
+    "    # mean center the data\n",
+    "    meannp = np.mean(X, axis=0)\n",
+    "    #print(meannp)\n",
+    "    #print(\"mean_vector: \", mean_vector)\n",
+    "    \n",
+    "    X_demeaned = X - meannp\n",
+    "    #print(\"X_demeaned.shape\", X_demeaned.shape)\n",
+    "\n",
+    "    # calculate the covariance matrix\n",
+    "    #covariance_matrix = np.cov([X_demeaned[0,:], X_demeaned[1,:], X_demeaned[2,:]])\n",
+    "    covariance_matrix = np.cov(X_demeaned.T)\n",
+    "    # calculate eigenvectors & eigenvalues of the covariance matrix\n",
+    "    eigen_vals, eigen_vecs = np.linalg.eigh(covariance_matrix, UPLO = 'L')\n",
+    "    \n",
+    "    \n",
+    "\n",
+    "    # sort eigenvalue in increasing order (get the indices from the sort)\n",
+    "    sorted_eigs = sorted(eigen_vals)\n",
+    "    idx_sorted = np.argsort(eigen_vals)\n",
+    "    print(idx_sorted)\n",
+    "    #print(\"eigen_vecs:\")\n",
+    "    #print(eigen_vecs)\n",
+    "    #print(\"done\")\n",
+    "#     for index in range(len(eigen_vals)):\n",
+    "#         for eig in range(len(sorted_eigs)):\n",
+    "#             if sorted_eigs[eig] == eigen_vals[index]:\n",
+    "#                 idx_sorted.append(eig)\n",
+    "\n",
+    "    # reverse the order so that it's from highest to lowest.\n",
+    "    idx_sorted_decreasing = idx_sorted[::-1]\n",
+    "    #idx_sorted_decreasing = sorted(idx_sorted, reverse = True)\n",
+    "\n",
+    "    # sort the eigen values by idx_sorted_decreasing\n",
+    "    eigen_vals_sorted = eigen_vals[idx_sorted_decreasing]\n",
+    "    #for i in eigen_vals_sorted:\n",
+    "    #    print(i)\n",
+    "\n",
+    "    # sort eigenvectors using the idx_sorted_decreasing indices\n",
+    "    eigen_vecs_sorted = eigen_vecs[:,idx_sorted_decreasing]\n",
+    "\n",
+    "        \n",
+    "    # select the first n eigenvectors (n is desired dimension\n",
+    "    # of rescaled data array, or dims_rescaled_data)\n",
+    "    eigen_vecs_subset = eigen_vecs_sorted[:, :n_components]\n",
+    "    #print(eigen_vecs_subset)\n",
+    "\n",
+    "    #print(\"eigen_vecs_subset: \", eigen_vecs_subset.shape)\n",
+    "    #print(\"Demeaned X: \", X_demeaned.shape)\n",
+    "    # transform the data by multiplying the transpose of the eigenvectors \n",
+    "    # with the transpose of the de-meaned data\n",
+    "    # Then take the transpose of that product.\n",
+    "    X_reduced = eigen_vecs_subset.T.dot(X_demeaned.T)\n",
+    "\n",
+    "    ### END CODE HERE ###\n",
+    "\n",
+    "    return X_reduced\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 110,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "[0 1 2 3 4 5 6 7 8 9]\n",
+      "Your original matrix was (3, 10) and it became:\n",
+      "[[ 0.43437323  0.49820384]\n",
+      " [ 0.42077249 -0.50351448]\n",
+      " [-0.85514571  0.00531064]]\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Testing your function\n",
+    "np.random.seed(1)\n",
+    "X = np.random.rand(3, 10)\n",
+    "X_reduced = compute_pca(X, n_components=2)\n",
+    "print(\"Your original matrix was \" + str(X.shape) + \" and it became:\")\n",
+    "print(X_reduced.T)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Expected Output:**\n",
+    "\n",
+    "Your original matrix was: (3,10) and it became:\n",
+    "\n",
+    "<table>\n",
+    "    <tr>\n",
+    "        <td>\n",
+    "           0.43437323\n",
+    "            </td>\n",
+    "                <td>\n",
+    "            0.49820384\n",
+    "            </td>\n",
+    "    </tr>\n",
+    "    <tr>\n",
+    "        <td>\n",
+    "            0.42077249\n",
+    "            </td>\n",
+    "                <td>\n",
+    "           -0.50351448\n",
+    "            </td>\n",
+    "    </tr>\n",
+    "    <tr>\n",
+    "        <td>\n",
+    "            -0.85514571\n",
+    "            </td>\n",
+    "                <td>\n",
+    "           0.00531064\n",
+    "            </td>\n",
+    "    </tr>\n",
+    "</table>\n",
+    "\n",
+    "Now you will use your pca function to plot a few words we have chosen for you.\n",
+    "You will see that similar words tend to be clustered near each other.\n",
+    "Sometimes, even antonyms tend to be clustered near each other. Antonyms\n",
+    "describe the same thing but just tend to be on the other end of the scale\n",
+    "They are usually found in the same location of a sentence,\n",
+    "have the same parts of speech, and thus when\n",
+    "learning the word vectors, you end up getting similar weights. In the next week\n",
+    "we will go over how you learn them, but for now let's just enjoy using them.\n",
+    "\n",
+    "**Instructions:** Run the cell below."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 105,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "You have 11 words each of 300 dimensions thus X.shape is: (11, 300)\n"
+     ]
+    }
+   ],
+   "source": [
+    "words = ['oil', 'gas', 'happy', 'sad', 'city', 'town',\n",
+    "         'village', 'country', 'continent', 'petroleum', 'joyful']\n",
+    "\n",
+    "# given a list of words and the embeddings, it returns a matrix with all the embeddings\n",
+    "X = get_vectors(word_embeddings, words)\n",
+    "\n",
+    "print('You have 11 words each of 300 dimensions thus X.shape is:', X.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 106,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "[  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17\n",
+      "  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35\n",
+      "  36  37  38  39  40  41  42  43  44  45  46  47  48  49  50  51  52  53\n",
+      "  54  55  56  57  58  59  60  61  62  63  64  65  66  67  68  69  70  71\n",
+      "  72  73  74  75  76  77  78  79  80  81  82  83  84  85  86  87  88  89\n",
+      "  90  91  92  93  94  95  96  97  98  99 100 101 102 103 104 105 106 107\n",
+      " 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125\n",
+      " 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143\n",
+      " 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161\n",
+      " 162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179\n",
+      " 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197\n",
+      " 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215\n",
+      " 216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233\n",
+      " 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251\n",
+      " 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269\n",
+      " 270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287\n",
+      " 288 289 290 291 292 293 294 295 296 297 298 299]\n"
+     ]
+    },
+    {
+     "ename": "IndexError",
+     "evalue": "index 2 is out of bounds for axis 0 with size 2",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[0;31mIndexError\u001b[0m                                Traceback (most recent call last)",
+      "\u001b[0;32m<ipython-input-106-02bad731ebd1>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n\u001b[1;32m      3\u001b[0m \u001b[0mplt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mscatter\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mresult\u001b[0m\u001b[0;34m[\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;36m0\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mresult\u001b[0m\u001b[0;34m[\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;36m1\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      4\u001b[0m \u001b[0;32mfor\u001b[0m \u001b[0mi\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mword\u001b[0m \u001b[0;32min\u001b[0m \u001b[0menumerate\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mwords\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m----> 5\u001b[0;31m     \u001b[0mplt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mannotate\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mword\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mxy\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mresult\u001b[0m\u001b[0;34m[\u001b[0m\u001b[0mi\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;36m0\u001b[0m\u001b[0;34m]\u001b[0m \u001b[0;34m-\u001b[0m \u001b[0;36m0.05\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mresult\u001b[0m\u001b[0;34m[\u001b[0m\u001b[0mi\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;36m1\u001b[0m\u001b[0;34m]\u001b[0m \u001b[0;34m+\u001b[0m \u001b[0;36m0.1\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m      6\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      7\u001b[0m \u001b[0mplt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mshow\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;31mIndexError\u001b[0m: index 2 is out of bounds for axis 0 with size 2"
+     ]
+    },
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "# We have done the plotting for you. Just run this cell.\n",
+    "result = compute_pca(X, 2)\n",
+    "plt.scatter(result[:, 0], result[:, 1])\n",
+    "for i, word in enumerate(words):\n",
+    "    plt.annotate(word, xy=(result[i, 0] - 0.05, result[i, 1] + 0.1))\n",
+    "\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**What do you notice?**\n",
+    "\n",
+    "The word vectors for 'gas', 'oil' and 'petroleum' appear related to each other,\n",
+    "because their vectors are close to each other.  Similarly, 'sad', 'joyful'\n",
+    "and 'happy' all express emotions, and are also near each other."
+   ]
+  }
+ ],
+ "metadata": {
+  "anaconda-cloud": {},
+  "coursera": {
+   "schema_names": [
+    "NLPC1-3"
+   ]
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.1"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 1
+}
